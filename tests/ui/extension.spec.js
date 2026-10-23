@@ -501,3 +501,37 @@ test("タブのクリックとタップで移動し、未ピン留めの表示�
     await expect(b.locator("#sideflow-surface")).toHaveCSS("opacity", "0");
   } finally { await context.close(); }
 });
+
+test("表示中はページと固定ヘッダーを左右・下ドックの外に収める", async () => {
+  const context = await chromium.launchPersistentContext("", {
+    channel: "chromium", executablePath: chromium.executablePath(), headless: true,
+    viewport: { width: 1200, height: 850 },
+    args: [`--disable-extensions-except=${path.resolve("dist")}`, `--load-extension=${path.resolve("dist")}`],
+  });
+  try {
+    const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
+    await worker.evaluate(() => chrome.storage.local.set({ setupComplete: true, sidebarPinned: true }));
+    await context.route("http://layout.test/**", route => route.fulfill({ contentType: "text/html", body:
+      '<body style="margin:0"><header style="position:fixed;left:0;right:0;top:0;height:40px">Header</header><main style="height:2400px">Page</main></body>' }));
+    const page = await context.newPage();
+    await page.goto("http://layout.test/");
+    const rect = selector => page.locator(selector).boundingBox();
+    await expect.poll(async () => (await rect("body")).x).toBe(260);
+    expect((await rect("header")).x).toBe(260);
+    expect((await rect("body")).width).toBe(940);
+    await worker.evaluate(() => chrome.storage.local.set({ placement: "right" }));
+    await expect.poll(async () => (await rect("body")).x).toBe(0);
+    expect((await rect("header")).width).toBe(940);
+    await worker.evaluate(() => chrome.storage.local.set({ placement: "bottom" }));
+    await expect.poll(async () => (await rect("body")).height).toBe(670);
+    expect((await rect("body")).width).toBe(1200);
+    await page.evaluate(() => document.body.scrollTop = 350);
+    await worker.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ url: "http://layout.test/*" });
+      await chrome.tabs.sendMessage(tab.id, { type: "sideflow-toggle" });
+    });
+    await expect(page.locator("#sideflow-page-layout")).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(350);
+    expect((await rect("header")).width).toBe(1200);
+  } finally { await context.close(); }
+});

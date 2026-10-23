@@ -38,6 +38,38 @@
   rail.setAttribute("aria-hidden", "true");
   const validPlacement = (value) =>
     ["left", "right", "bottom"].includes(value) ? value : "left";
+  // Keep the page in its own viewport. A transform also contains fixed page
+  // headers/footers so they cannot extend behind the sidebar.
+  const pageStyle = document.createElement("style");
+  pageStyle.id = "sideflow-page-layout";
+  let pageReserved = false;
+  function reservePage() {
+    const body = document.body;
+    if (!body) return;
+    if (visible) {
+      const x = pageReserved ? body.scrollLeft : window.scrollX;
+      const y = pageReserved ? body.scrollTop : window.scrollY;
+      const side = "min(260px,90vw)";
+      const bottom = placement === "bottom" ? "calc(min(156px,70vh) + 24px)" : "0px";
+      pageStyle.textContent = `
+        html { overflow: hidden !important; }
+        body { position: fixed !important; inset: 0 ${placement === "right" ? side : "0px"} ${bottom} ${placement === "left" ? side : "0px"} !important;
+          width: auto !important; height: auto !important; min-width: 0 !important; min-height: 0 !important;
+          max-width: none !important; max-height: none !important; margin: 0 !important;
+          overflow: auto !important; transform: translateZ(0) !important;
+          box-sizing: border-box !important; }
+      `;
+      if (!pageStyle.isConnected) document.documentElement.append(pageStyle);
+      pageReserved = true;
+      body.scrollTo(x, y);
+    } else if (pageReserved) {
+      const x = body.scrollLeft, y = body.scrollTop;
+      pageStyle.remove();
+      pageReserved = false;
+      window.scrollTo(x, y);
+    }
+  }
+  document.addEventListener("DOMContentLoaded", reservePage, { once: true });
   function layout() {
     const bottom = placement === "bottom";
     const shift = visible
@@ -47,6 +79,7 @@
         : `translateX(${placement === "right" ? "" : "-"}110%)`;
     host.style.cssText = `all:initial!important;position:fixed!important;z-index:2147483647!important;${bottom ? "bottom:12px!important;left:12px!important;width:calc(100% - 24px)!important;height:min(156px,70vh)!important;" : `top:0!important;${placement}:0!important;width:min(260px,90vw)!important;height:100vh!important;`}font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;font-size:13px!important;line-height:1.5!important;color:#414650!important;direction:ltr!important;border-radius:${bottom ? "16px" : "0"}!important;box-shadow:0 4px 40px #20334a30!important;backdrop-filter:blur(28px)!important;-webkit-backdrop-filter:blur(28px)!important;overflow:hidden!important;transform:${shift}!important;opacity:${visible ? 1 : 0}!important;pointer-events:${visible ? "auto" : "none"}!important;transition:${matchMedia("(prefers-reduced-motion: reduce)").matches ? "none" : "transform .22s ease,opacity .22s ease"}!important;`;
     host.inert = !visible;
+    reservePage();
     rail.style.cssText = `all:initial!important;position:fixed!important;z-index:2147483646!important;${bottom ? "bottom:0!important;left:0!important;width:100%!important;height:5px!important;" : `top:0!important;${placement}:0!important;width:5px!important;height:100vh!important;`}background:transparent!important;`;
   }
   function show(value, temporary = false, persist = true) {
