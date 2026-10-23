@@ -38,73 +38,6 @@
   rail.setAttribute("aria-hidden", "true");
   const validPlacement = (value) =>
     ["left", "right", "bottom"].includes(value) ? value : "left";
-  // Preserve the original page width: responsive grids can otherwise move
-  // negatively positioned logos underneath the sidebar. Scale into the free area.
-  const notionPage = /(^|\.)notion\.(so|com)$/.test(location.hostname);
-  const pageStyle = document.createElement("style");
-  pageStyle.id = "sideflow-page-layout";
-  let pageReserved = false;
-  const viewportRoots = new Set();
-  function clearViewportRoots() {
-    for (const root of viewportRoots) root.removeAttribute("data-sideflow-viewport-height");
-    viewportRoots.clear();
-  }
-  function reservePage() {
-    const body = document.body;
-    if (!body) return;
-    if (visible) {
-      const x = pageReserved ? body.scrollLeft : window.scrollX;
-      const y = pageReserved ? body.scrollTop : window.scrollY;
-      const side = placement === "bottom" ? 0 : Math.min(260, innerWidth * .9);
-      const bottom = placement === "bottom" ? Math.min(156, innerHeight * .7) + 24 : 0;
-      const scale = (innerWidth - side) / innerWidth;
-      const pageHeight = (innerHeight - bottom) / scale;
-      // 100vh application roots do not inherit the compensated body height.
-      // Stretch only roots that occupy exactly the original viewport height;
-      // percentage-height descendants then follow naturally (e.g. Notion).
-      clearViewportRoots();
-      for (const root of body.children) {
-        if (!["DIV", "MAIN", "SECTION"].includes(root.tagName)) continue;
-        const height = parseFloat(getComputedStyle(root).height);
-        if (Math.abs(height - innerHeight) < 1) {
-          viewportRoots.add(root);
-          root.setAttribute("data-sideflow-viewport-height", "");
-        }
-      }
-      pageStyle.textContent = `
-        html { overflow: hidden !important; }
-        body { position: fixed !important; inset: 0 auto auto ${placement === "left" ? side : 0}px !important;
-          width: ${innerWidth}px !important; height: ${pageHeight}px !important; min-width: 0 !important; min-height: 0 !important;
-          max-width: none !important; max-height: none !important; margin: 0 !important;
-          overflow: auto !important; transform: scale(${scale}) !important; transform-origin: top left !important;
-          box-sizing: border-box !important; }
-        body > [data-sideflow-viewport-height] {
-          height: ${pageHeight}px !important; max-height: ${pageHeight}px !important;
-        }
-        ${notionPage ? `
-          body { overflow: clip !important; }
-          #notion-app .notion-frame {
-            flex: 1 1 0% !important; height: auto !important; min-height: 0 !important;
-          }
-        ` : ""}
-      `;
-      if (!pageStyle.isConnected) document.documentElement.append(pageStyle);
-      pageReserved = true;
-      body.scrollTo(x, y);
-    } else if (pageReserved) {
-      const x = body.scrollLeft, y = body.scrollTop;
-      pageStyle.remove();
-      clearViewportRoots();
-      pageReserved = false;
-      window.scrollTo(x, y);
-    }
-  }
-  document.addEventListener("DOMContentLoaded", reservePage, { once: true });
-  window.addEventListener("resize", reservePage);
-  window.addEventListener("load", reservePage, { once: true });
-  if (document.body) new MutationObserver(() => {
-    if (visible) reservePage();
-  }).observe(document.body, { childList: true });
   function layout() {
     const bottom = placement === "bottom";
     const shift = visible
@@ -114,7 +47,6 @@
         : `translateX(${placement === "right" ? "" : "-"}110%)`;
     host.style.cssText = `all:initial!important;position:fixed!important;z-index:2147483647!important;${bottom ? "bottom:12px!important;left:12px!important;width:calc(100% - 24px)!important;height:min(156px,70vh)!important;" : `top:0!important;${placement}:0!important;width:min(260px,90vw)!important;height:100vh!important;`}font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;font-size:13px!important;line-height:1.5!important;color:#414650!important;direction:ltr!important;border-radius:${bottom ? "16px" : "0"}!important;box-shadow:0 4px 40px #20334a30!important;backdrop-filter:blur(28px)!important;-webkit-backdrop-filter:blur(28px)!important;overflow:hidden!important;transform:${shift}!important;opacity:${visible ? 1 : 0}!important;pointer-events:${visible ? "auto" : "none"}!important;transition:${matchMedia("(prefers-reduced-motion: reduce)").matches ? "none" : "transform .22s ease,opacity .22s ease"}!important;`;
     host.inert = !visible;
-    reservePage();
     rail.style.cssText = `all:initial!important;position:fixed!important;z-index:2147483646!important;${bottom ? "bottom:0!important;left:0!important;width:100%!important;height:5px!important;" : `top:0!important;${placement}:0!important;width:5px!important;height:100vh!important;`}background:transparent!important;`;
   }
   function show(value, temporary = false, persist = true) {

@@ -511,7 +511,7 @@ test("タブのクリックとタップで移動し、未ピン留めの表示�
   } finally { await context.close(); }
 });
 
-test("表示中はページと固定ヘッダーを左右・下ドックの外に収める", async () => {
+test("重ね表示はページ幅・windowスクロール・固定とstickyヘッダーを変更しない", async () => {
   const context = await chromium.launchPersistentContext("", {
     channel: "chromium", executablePath: chromium.executablePath(), headless: true,
     viewport: { width: 1200, height: 850 },
@@ -520,40 +520,43 @@ test("表示中はページと固定ヘッダーを左右・下ドックの外�
   try {
     const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
     await worker.evaluate(() => chrome.storage.local.set({ setupComplete: true, sidebarPinned: true }));
-    await context.route("http://layout.test/**", route => route.fulfill({ contentType: "text/html", body:
-      '<style>.grid{display:grid;grid-template-columns:calc((100% - 800px)/2) 1fr}.search{grid-column:2;position:relative}.logo{position:absolute;left:-160px}</style><body style="margin:0"><header style="position:fixed;left:0;right:0;top:0;height:40px">Header</header><div class="grid"><div class="search"><span class="logo">Logo</span>Search</div></div><main style="height:2400px">Page</main></body>' }));
+    await context.route("https://www.google.com/sideflow-layout/**", route => route.fulfill({ contentType: "text/html", body:
+      '<!doctype html><style>.grid{display:grid;grid-template-columns:calc((100% - 800px)/2) 1fr}.search{grid-column:2;position:relative}.logo{position:absolute;left:-160px}</style><body style="margin:0"><header style="position:fixed;left:0;right:0;top:0;height:40px">Header</header><div class="grid" id="searchform"><div class="search"><span class="logo">Logo</span>Search</div></div><main style="height:2400px"><div class="sticky" style="position:sticky;top:40px">Sticky</div>Page</main></body>' }));
     const page = await context.newPage();
-    await page.goto("http://layout.test/");
+    await page.goto("https://www.google.com/sideflow-layout/");
     const rect = selector => page.locator(selector).boundingBox();
-    await expect.poll(async () => (await rect("body")).x).toBe(260);
-    expect((await rect("header")).x).toBe(260);
-    expect((await rect("body")).width).toBeCloseTo(940);
-    expect((await rect(".logo")).x).toBeGreaterThanOrEqual(260);
+    await expect.poll(async () => (await rect("body")).x).toBe(0);
+    expect((await rect("header")).x).toBe(0);
+    expect((await rect("body")).width).toBeCloseTo(1200);
+    expect((await rect(".logo")).x).toBeGreaterThanOrEqual(0);
     await worker.evaluate(() => chrome.storage.local.set({ placement: "right" }));
     await expect.poll(async () => (await rect("body")).x).toBe(0);
-    expect((await rect("header")).width).toBeCloseTo(940);
+    expect((await rect("header")).width).toBeCloseTo(1200);
     const logo = await rect(".logo");
     expect(logo.x).toBeGreaterThanOrEqual(0);
-    expect(logo.x + logo.width).toBeLessThanOrEqual(940);
+    expect(logo.x + logo.width).toBeLessThanOrEqual(1200);
     await worker.evaluate(() => chrome.storage.local.set({ placement: "bottom" }));
-    await expect.poll(async () => (await rect("body")).height).toBe(670);
+    await expect.poll(() => page.locator("html").evaluate(el => getComputedStyle(el).paddingBottom)).toBe("0px");
     expect((await rect("body")).width).toBe(1200);
-    await page.evaluate(() => document.body.scrollTop = 350);
+    await page.evaluate(() => window.scrollTo(0, 350));
+    expect((await rect("header")).y).toBe(0);
+    expect((await rect(".sticky")).y).toBe(40);
+    expect(await page.evaluate(() => window.scrollY)).toBe(350);
     await worker.evaluate(async () => {
-      const [tab] = await chrome.tabs.query({ url: "http://layout.test/*" });
+      const [tab] = await chrome.tabs.query({ url: "https://www.google.com/sideflow-layout/*" });
       await chrome.tabs.sendMessage(tab.id, { type: "sideflow-toggle" });
     });
     await expect(page.locator("#sideflow-page-layout")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(350);
     expect((await rect("header")).width).toBe(1200);
     await worker.evaluate(async () => {
-      const [tab] = await chrome.tabs.query({ url: "http://layout.test/*" });
+      const [tab] = await chrome.tabs.query({ url: "https://www.google.com/sideflow-layout/*" });
       await chrome.tabs.sendMessage(tab.id, { type: "sideflow-toggle" });
     });
     await worker.evaluate(() => chrome.storage.local.set({ placement: "left" }));
     await page.setViewportSize({ width: 1400, height: 900 });
-    await expect.poll(async () => (await rect("body")).width).toBeCloseTo(1140);
-    expect((await rect(".logo")).x).toBeGreaterThanOrEqual(260);
+    await expect.poll(async () => (await rect("body")).width).toBeCloseTo(1400);
+    expect((await rect(".logo")).x).toBeGreaterThanOrEqual(0);
     await page.screenshot({ path: "artifacts/sideflow-page-fit.png" });
   } finally { await context.close(); }
 });
@@ -632,7 +635,7 @@ test("新規タブ: 4色テーマと見出しを保存し再読み込みと別�
   } finally { await context.close(); }
 });
 
-test("100vhのアプリと内部スクロールが縮小後も画面下端まで届く", async () => {
+test("重ね表示は100vhアプリと内部スクロールのレイアウトを変更しない", async () => {
   const context = await chromium.launchPersistentContext("", {
     channel: "chromium", executablePath: chromium.executablePath(), headless: true,
     viewport: { width: 1200, height: 850 },
@@ -642,14 +645,13 @@ test("100vhのアプリと内部スクロールが縮小後も画面下端まで
     const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
     await worker.evaluate(() => chrome.storage.local.set({ setupComplete: true, sidebarPinned: true }));
     await context.route("https://app.notion.com/sideflow-layout-test/**", route => route.fulfill({ contentType: "text/html", body:
-      '<style>body{margin:0}#notion-app{height:100vh;max-height:100vh;background:#e5edf6}.inner{height:100%;display:flex;flex-direction:column}.notion-frame{display:flex;flex-direction:column;flex:0 1 auto;height:calc(100vh - 44px);max-height:100%}header{height:44px;flex-shrink:0}.scroller{flex:1;min-height:0;overflow:auto}.content{height:2400px}#short{height:80px}</style><div id="notion-app"><div class="inner"><header>App header</header><main class="notion-frame"><div class="scroller"><div class="content">Page content</div></div><footer>App footer</footer></main></div></div><div id="short">Short content</div>' }));
+      '<!doctype html><style>html,body{margin:0;height:100%;overflow:hidden}#notion-app{height:100vh;max-height:100vh;background:#e5edf6}.inner{height:100%;display:flex;flex-direction:column}.notion-frame{display:flex;flex-direction:column;flex:0 1 auto;height:calc(100vh - 44px);max-height:100%}header{height:44px;flex-shrink:0}.scroller{flex:1;min-height:0;overflow:auto}.content{height:2400px}#short{height:80px}</style><div id="notion-app"><div class="inner"><header>App header</header><main class="notion-frame"><div class="scroller"><div class="content">Page content</div></div><footer>App footer</footer></main></div></div><div id="short">Short content</div>' }));
     const page = await context.newPage();
     await page.goto("https://app.notion.com/sideflow-layout-test/");
     const bottom = selector => page.locator(selector).evaluate(el => el.getBoundingClientRect().bottom);
     await expect.poll(() => bottom("#notion-app")).toBeCloseTo(850, 0);
     await expect.poll(() => bottom(".inner")).toBeCloseTo(850, 0);
-    await page.evaluate(() => document.body.scrollTop = 20);
-    expect(await page.evaluate(() => document.body.scrollTop)).toBe(0);
+    await expect(page.locator("#sideflow-page-layout")).toHaveCount(0);
     expect(await page.locator("header").evaluate(el => el.getBoundingClientRect().top)).toBe(0);
     await expect.poll(() => bottom("footer")).toBeCloseTo(850, 0);
     await page.locator(".scroller").evaluate(el => el.scrollTop = 500);
@@ -661,7 +663,7 @@ test("100vhのアプリと内部スクロールが縮小後も画面下端まで
     await worker.evaluate(() => chrome.storage.local.set({ placement: "right" }));
     await expect.poll(() => bottom("footer")).toBeCloseTo(900, 0);
     await worker.evaluate(() => chrome.storage.local.set({ placement: "bottom" }));
-    await expect.poll(() => bottom("footer")).toBeCloseTo(720, 0);
+    await expect.poll(() => bottom("footer")).toBeCloseTo(900, 0);
     await worker.evaluate(async () => {
       const [tab] = await chrome.tabs.query({ url: "https://app.notion.com/sideflow-layout-test/*" });
       await chrome.tabs.sendMessage(tab.id, { type: "sideflow-toggle" });
