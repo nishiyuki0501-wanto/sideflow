@@ -1,11 +1,11 @@
 {
   "name": "sideflow",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "vite build && vite build --config vite.overlay.config.js && node scripts/build-extension.js",
+    "build": "vite build && node scripts/build-extension.js",
     "test": "node --test tests/model.test.js",
     "check": "npm run build && npm test",
     "test:ui": "playwright test",

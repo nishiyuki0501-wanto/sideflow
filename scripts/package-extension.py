@@ -10,7 +10,7 @@ dist = root / 'dist'
 manifest = json.loads((dist / 'manifest.json').read_text())
 package = json.loads((root / 'package.json').read_text())
 assert package['version'] == manifest['version'], 'Version mismatch'
-for name in ['background.js', 'content.js', 'overlay.js', 'overlay.css', 'index.html', 'newtab.html', 'newtab.js', 'help.html']:
+for name in ['background.js', 'index.html', 'newtab.html', 'newtab.js', 'help.html']:
     assert (dist / name).is_file(), f'Missing {name}'
 out = root / 'artifacts'
 out.mkdir(exist_ok=True)

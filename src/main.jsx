@@ -794,7 +794,7 @@ function App() {
   );
   return (
     <div
-      className={`browser-shell placement-${placement} ${extension ? "extension-mode" : ""} ${overlay ? "overlay-mode" : ""}`}
+      className={`browser-shell placement-${extension && !overlay ? "left" : placement} ${extension ? "extension-mode" : ""} ${overlay ? "overlay-mode" : ""}`}
       style={{
         "--theme-tint": theme.tint,
         "--theme-accent": theme.accent,

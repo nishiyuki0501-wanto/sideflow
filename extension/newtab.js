@@ -1,4 +1,11 @@
-document.getElementById('open-sidebar').addEventListener('click', () => globalThis.__sideflowController?.({ type: 'sideflow-open' }));
+let panelWindowId;
+chrome.tabs.getCurrent().then(tab => { panelWindowId = tab?.windowId; });
+document.getElementById('open-sidebar').addEventListener('click', () => {
+  if (panelWindowId === undefined) return;
+  chrome.sidePanel.open({ windowId: panelWindowId }).catch(() => {
+    document.querySelector('#page-status').textContent = 'ツールバーのSideflowアイコンから開いてください';
+  });
+});
 document.getElementById('search').addEventListener('submit', event => {
   event.preventDefault();
   const value = document.getElementById('query').value.trim();
@@ -9,14 +16,6 @@ document.getElementById('search').addEventListener('submit', event => {
     if (!/\s/.test(value) && candidate.hostname.includes('.') && !/^[a-z]+:/i.test(value.replace(/^https?:/i, ''))) url = candidate.href;
   } catch {}
   location.assign(url || `https://www.google.com/search?q=${encodeURIComponent(value)}`);
-});
-
-chrome.tabs.getCurrent().then(tab => {
-  chrome.runtime.onMessage.addListener((message, sender, respond) => {
-    if (message.type !== "sideflow-newtab-toggle" || message.tabId !== tab.id) return;
-    globalThis.__sideflowController?.({ type: "sideflow-toggle" });
-    respond({ ok: true });
-  });
 });
 
 const pageTheme = document.querySelector('#page-theme');
