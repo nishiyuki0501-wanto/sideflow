@@ -641,13 +641,16 @@ test("100vhのアプリと内部スクロールが縮小後も画面下端まで
   try {
     const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
     await worker.evaluate(() => chrome.storage.local.set({ setupComplete: true, sidebarPinned: true }));
-    await context.route("http://viewport.test/**", route => route.fulfill({ contentType: "text/html", body:
-      '<style>body{margin:0}#app{height:100vh;max-height:100vh;background:#e5edf6}.inner{height:100%;display:flex;flex-direction:column}header{height:40px;flex-shrink:0}.scroller{flex:1;min-height:0;overflow:auto}.content{height:2400px}#short{height:80px}</style><div id="app"><div class="inner"><header>App header</header><main class="scroller"><div class="content">Page content</div></main><footer>App footer</footer></div></div><div id="short">Short content</div>' }));
+    await context.route("https://app.notion.com/sideflow-layout-test/**", route => route.fulfill({ contentType: "text/html", body:
+      '<style>body{margin:0}#notion-app{height:100vh;max-height:100vh;background:#e5edf6}.inner{height:100%;display:flex;flex-direction:column}.notion-frame{display:flex;flex-direction:column;flex:0 1 auto;height:calc(100vh - 44px);max-height:100%}header{height:44px;flex-shrink:0}.scroller{flex:1;min-height:0;overflow:auto}.content{height:2400px}#short{height:80px}</style><div id="notion-app"><div class="inner"><header>App header</header><main class="notion-frame"><div class="scroller"><div class="content">Page content</div></div><footer>App footer</footer></main></div></div><div id="short">Short content</div>' }));
     const page = await context.newPage();
-    await page.goto("http://viewport.test/");
+    await page.goto("https://app.notion.com/sideflow-layout-test/");
     const bottom = selector => page.locator(selector).evaluate(el => el.getBoundingClientRect().bottom);
-    await expect.poll(() => bottom("#app")).toBeCloseTo(850, 0);
+    await expect.poll(() => bottom("#notion-app")).toBeCloseTo(850, 0);
     await expect.poll(() => bottom(".inner")).toBeCloseTo(850, 0);
+    await page.evaluate(() => document.body.scrollTop = 20);
+    expect(await page.evaluate(() => document.body.scrollTop)).toBe(0);
+    expect(await page.locator("header").evaluate(el => el.getBoundingClientRect().top)).toBe(0);
     await expect.poll(() => bottom("footer")).toBeCloseTo(850, 0);
     await page.locator(".scroller").evaluate(el => el.scrollTop = 500);
     expect(await page.locator(".scroller").evaluate(el => el.scrollTop)).toBe(500);
@@ -660,16 +663,16 @@ test("100vhのアプリと内部スクロールが縮小後も画面下端まで
     await worker.evaluate(() => chrome.storage.local.set({ placement: "bottom" }));
     await expect.poll(() => bottom("footer")).toBeCloseTo(720, 0);
     await worker.evaluate(async () => {
-      const [tab] = await chrome.tabs.query({ url: "http://viewport.test/*" });
+      const [tab] = await chrome.tabs.query({ url: "https://app.notion.com/sideflow-layout-test/*" });
       await chrome.tabs.sendMessage(tab.id, { type: "sideflow-toggle" });
     });
     await expect(page.locator("[data-sideflow-viewport-height]")).toHaveCount(0);
     await expect.poll(() => bottom("footer")).toBeCloseTo(900, 0);
     // A late-mounted SPA root must also fill the available height on reopening.
-    await page.locator("#app").evaluate(el => { const copy = el.cloneNode(true); el.replaceWith(copy); });
+    await page.locator("#notion-app").evaluate(el => { const copy = el.cloneNode(true); el.replaceWith(copy); });
     await worker.evaluate(() => chrome.storage.local.set({ placement: "left", sidebarPinned: true }));
     await expect.poll(() => bottom("footer")).toBeCloseTo(900, 0);
-    await page.locator("#app").evaluate(el => {
+    await page.locator("#notion-app").evaluate(el => {
       const copy = el.cloneNode(true);
       copy.removeAttribute("data-sideflow-viewport-height");
       el.replaceWith(copy);

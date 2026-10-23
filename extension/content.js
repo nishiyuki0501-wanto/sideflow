@@ -40,6 +40,7 @@
     ["left", "right", "bottom"].includes(value) ? value : "left";
   // Preserve the original page width: responsive grids can otherwise move
   // negatively positioned logos underneath the sidebar. Scale into the free area.
+  const notionPage = /(^|\.)notion\.(so|com)$/.test(location.hostname);
   const pageStyle = document.createElement("style");
   pageStyle.id = "sideflow-page-layout";
   let pageReserved = false;
@@ -80,6 +81,12 @@
         body > [data-sideflow-viewport-height] {
           height: ${pageHeight}px !important; max-height: ${pageHeight}px !important;
         }
+        ${notionPage ? `
+          body { overflow: clip !important; }
+          #notion-app .notion-frame {
+            flex: 1 1 0% !important; height: auto !important; min-height: 0 !important;
+          }
+        ` : ""}
       `;
       if (!pageStyle.isConnected) document.documentElement.append(pageStyle);
       pageReserved = true;
