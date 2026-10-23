@@ -43,6 +43,11 @@
   const pageStyle = document.createElement("style");
   pageStyle.id = "sideflow-page-layout";
   let pageReserved = false;
+  const viewportRoots = new Set();
+  function clearViewportRoots() {
+    for (const root of viewportRoots) root.removeAttribute("data-sideflow-viewport-height");
+    viewportRoots.clear();
+  }
   function reservePage() {
     const body = document.body;
     if (!body) return;
@@ -52,13 +57,29 @@
       const side = placement === "bottom" ? 0 : Math.min(260, innerWidth * .9);
       const bottom = placement === "bottom" ? Math.min(156, innerHeight * .7) + 24 : 0;
       const scale = (innerWidth - side) / innerWidth;
+      const pageHeight = (innerHeight - bottom) / scale;
+      // 100vh application roots do not inherit the compensated body height.
+      // Stretch only roots that occupy exactly the original viewport height;
+      // percentage-height descendants then follow naturally (e.g. Notion).
+      clearViewportRoots();
+      for (const root of body.children) {
+        if (!["DIV", "MAIN", "SECTION"].includes(root.tagName)) continue;
+        const height = parseFloat(getComputedStyle(root).height);
+        if (Math.abs(height - innerHeight) < 1) {
+          viewportRoots.add(root);
+          root.setAttribute("data-sideflow-viewport-height", "");
+        }
+      }
       pageStyle.textContent = `
         html { overflow: hidden !important; }
         body { position: fixed !important; inset: 0 auto auto ${placement === "left" ? side : 0}px !important;
-          width: ${innerWidth}px !important; height: ${(innerHeight - bottom) / scale}px !important; min-width: 0 !important; min-height: 0 !important;
+          width: ${innerWidth}px !important; height: ${pageHeight}px !important; min-width: 0 !important; min-height: 0 !important;
           max-width: none !important; max-height: none !important; margin: 0 !important;
           overflow: auto !important; transform: scale(${scale}) !important; transform-origin: top left !important;
           box-sizing: border-box !important; }
+        body > [data-sideflow-viewport-height] {
+          height: ${pageHeight}px !important; max-height: ${pageHeight}px !important;
+        }
       `;
       if (!pageStyle.isConnected) document.documentElement.append(pageStyle);
       pageReserved = true;
@@ -66,12 +87,17 @@
     } else if (pageReserved) {
       const x = body.scrollLeft, y = body.scrollTop;
       pageStyle.remove();
+      clearViewportRoots();
       pageReserved = false;
       window.scrollTo(x, y);
     }
   }
   document.addEventListener("DOMContentLoaded", reservePage, { once: true });
   window.addEventListener("resize", reservePage);
+  window.addEventListener("load", reservePage, { once: true });
+  if (document.body) new MutationObserver(() => {
+    if (visible) reservePage();
+  }).observe(document.body, { childList: true });
   function layout() {
     const bottom = placement === "bottom";
     const shift = visible

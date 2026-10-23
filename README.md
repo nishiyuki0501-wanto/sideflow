@@ -2,11 +2,11 @@
 
 Arc / Dia風のページ内サイドバーを追加するChrome拡張です。React + Tailwind CSSで構築しています。Arc / Diaの公式製品ではありません。
 
-[配布版とリリースノート](https://github.com/nishiyuki0501-wanto/sideflow/releases/tag/v1.0.17)
+[配布版とリリースノート](https://github.com/nishiyuki0501-wanto/sideflow/releases/tag/v1.0.18)
 
 ## インストール
 
-1. Releaseから `sideflow-1.0.17.zip` をダウンロードして解凍します。
+1. Releaseから `sideflow-1.0.18.zip` をダウンロードして解凍します。
 2. Chromeで `chrome://extensions` を開き、デベロッパーモードをオンにします。
 3. 「パッケージ化されていない拡張機能を読み込む」で、解凍した `sideflow-extension` フォルダを選びます。
 4. 更新時は拡張の更新ボタンを押し、使うWebページも再読み込みしてください。新規タブは開き直してください。
