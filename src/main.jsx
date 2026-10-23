@@ -164,20 +164,28 @@ function Brand({ type, url }) {
     </span>
   );
 }
-function BookmarkImportList({ nodes }) {
+function selectBookmarks(nodes, excluded) {
+  return nodes.flatMap(node => {
+    if (node.url) return excluded.has(node.id) ? [] : [node];
+    const children = selectBookmarks(node.children || [], excluded);
+    return children.length ? [{ ...node, children }] : [];
+  });
+}
+function BookmarkImportList({ nodes, excluded, toggle }) {
   return (
     <ul className="import-site-list">
       {nodes.map(node => (
         <li key={node.id}>
           {node.url ? (
-            <div className="import-site-row" title={`${node.title}\n${node.url}`}>
+            <label className="import-site-row" title={`${node.title}\n${node.url}`}>
+              <input type="checkbox" checked={!excluded.has(node.id)} onChange={() => toggle(node.id)} aria-label={node.title} />
               <span className="import-site-icon" aria-hidden="true"><Brand url={node.url} /></span>
               <span className="import-site-title">{node.title}</span>
-            </div>
+            </label>
           ) : (
             <div className="import-site-folder">
               <div className="import-folder-label"><Files size={14} aria-hidden="true" /><span>{node.title}</span></div>
-              <BookmarkImportList nodes={node.children || []} />
+              <BookmarkImportList nodes={node.children || []} excluded={excluded} toggle={toggle} />
             </div>
           )}
         </li>
@@ -192,6 +200,15 @@ function App() {
   const profileGesture = useRef(createGestureGate());
   const [setupOpen, setSetupOpen] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
+  const [excludedBookmarks, setExcludedBookmarks] = useState(new Set());
+  const selectedBookmarks = selectBookmarks(importPreview || [], excludedBookmarks);
+  function toggleBookmark(id) {
+    setExcludedBookmarks(previous => {
+      const next = new Set(previous);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
   const [importBusy, setImportBusy] = useState(false);
   const pointerDrag = useRef(null);
   const suppressTabClick = useRef(false);
@@ -541,6 +558,7 @@ function App() {
   }
   async function previewBookmarks() {
     setImportBusy(true);
+    setExcludedBookmarks(new Set());
     try {
       setImportPreview(
         extension
@@ -572,8 +590,8 @@ function App() {
   }
   function finishSetup(importNow) {
     if (importNow && importPreview) {
-      setProfileBookmarks(prev => ({ ...prev, [profile]: importPreview }));
-      saveSettings({ [`bookmarks:${profile}`]: importPreview, setupComplete: true });
+      setProfileBookmarks(prev => ({ ...prev, [profile]: selectedBookmarks }));
+      saveSettings({ [`bookmarks:${profile}`]: selectedBookmarks, setupComplete: true });
     } else saveSettings({ setupComplete: true });
     setSetupOpen(false);
     setImportPreview(null);
@@ -1086,17 +1104,26 @@ function App() {
             {importPreview !== null ? (
               <>
                 <div className="import-preview">
-                  <BookmarkImportList nodes={importPreview} />
+                  <div className="import-selection-actions">
+                    <button onClick={() => setExcludedBookmarks(new Set())}>すべて選択</button>
+                    <button onClick={() => {
+                      const ids = [];
+                      const collect = nodes => nodes.forEach(node => node.url ? ids.push(node.id) : collect(node.children || []));
+                      collect(importPreview);
+                      setExcludedBookmarks(new Set(ids));
+                    }}>すべて解除</button>
+                  </div>
+                  <BookmarkImportList nodes={importPreview} excluded={excludedBookmarks} toggle={toggleBookmark} />
                   {!importPreview.length && (
                     <p>ブックマークバーにWebページがありません。</p>
                   )}
                 </div>
                 <button
                   className="setup-primary"
-                  disabled={importBusy || !countBookmarks(importPreview)}
+                  disabled={importBusy || !countBookmarks(selectedBookmarks)}
                   onClick={() => finishSetup(true)}
                 >
-                  {countBookmarks(importPreview)}件をインポート
+                  {countBookmarks(selectedBookmarks)}件をインポート
                 </button>
               </>
             ) : (

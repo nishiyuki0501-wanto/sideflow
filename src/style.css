@@ -972,3 +972,8 @@ button:hover {
 .import-folder-label { display:flex; align-items:center; gap:7px; padding:8px 4px 4px; color:#7c8798; font-size:11px; }
 .import-folder-label span { overflow-wrap:anywhere; }
 .import-site-folder > .import-site-list { margin-left:10px; padding-left:8px; border-left:1px solid #8797ad25; }
+
+.import-site-row { cursor:pointer; }
+.import-site-row input[type="checkbox"] { flex:0 0 auto; width:16px; height:16px; margin:0; accent-color:#687b9d; }
+.import-selection-actions { display:flex; gap:12px; margin-bottom:8px; }
+.import-selection-actions button { font-size:12px; padding:6px 8px; border-radius:6px; background:#8797ad18; }

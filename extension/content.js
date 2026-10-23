@@ -38,8 +38,8 @@
   rail.setAttribute("aria-hidden", "true");
   const validPlacement = (value) =>
     ["left", "right", "bottom"].includes(value) ? value : "left";
-  // Keep the page in its own viewport. A transform also contains fixed page
-  // headers/footers so they cannot extend behind the sidebar.
+  // Preserve the original page width: responsive grids can otherwise move
+  // negatively positioned logos underneath the sidebar. Scale into the free area.
   const pageStyle = document.createElement("style");
   pageStyle.id = "sideflow-page-layout";
   let pageReserved = false;
@@ -49,14 +49,15 @@
     if (visible) {
       const x = pageReserved ? body.scrollLeft : window.scrollX;
       const y = pageReserved ? body.scrollTop : window.scrollY;
-      const side = "min(260px,90vw)";
-      const bottom = placement === "bottom" ? "calc(min(156px,70vh) + 24px)" : "0px";
+      const side = placement === "bottom" ? 0 : Math.min(260, innerWidth * .9);
+      const bottom = placement === "bottom" ? Math.min(156, innerHeight * .7) + 24 : 0;
+      const scale = (innerWidth - side) / innerWidth;
       pageStyle.textContent = `
         html { overflow: hidden !important; }
-        body { position: fixed !important; inset: 0 ${placement === "right" ? side : "0px"} ${bottom} ${placement === "left" ? side : "0px"} !important;
-          width: auto !important; height: auto !important; min-width: 0 !important; min-height: 0 !important;
+        body { position: fixed !important; inset: 0 auto auto ${placement === "left" ? side : 0}px !important;
+          width: ${innerWidth}px !important; height: ${(innerHeight - bottom) / scale}px !important; min-width: 0 !important; min-height: 0 !important;
           max-width: none !important; max-height: none !important; margin: 0 !important;
-          overflow: auto !important; transform: translateZ(0) !important;
+          overflow: auto !important; transform: scale(${scale}) !important; transform-origin: top left !important;
           box-sizing: border-box !important; }
       `;
       if (!pageStyle.isConnected) document.documentElement.append(pageStyle);
@@ -70,6 +71,7 @@
     }
   }
   document.addEventListener("DOMContentLoaded", reservePage, { once: true });
+  window.addEventListener("resize", reservePage);
   function layout() {
     const bottom = placement === "bottom";
     const shift = visible

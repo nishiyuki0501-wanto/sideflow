@@ -419,9 +419,17 @@ test("初回セットアップ: ブックマークバーを非破壊で取り込
     await expect(ui.locator(".import-preview .import-site-icon")).toHaveCount(3);
     await expect(ui.locator(".import-preview .import-site-title").filter({ hasText: "Figma" })).toHaveCount(1);
 
-    await ui.getByRole("button", { name: "3件をインポート" }).click();
+    await expect(ui.getByRole("checkbox")).toHaveCount(3);
+    await expect(ui.getByRole("checkbox", { name: "Calendar", exact: true })).toBeChecked();
+    await ui.getByRole("button", { name: "すべて解除", exact: true }).click();
+    await expect(ui.getByRole("button", { name: "0件をインポート" })).toBeDisabled();
+    await ui.getByRole("button", { name: "すべて選択", exact: true }).click();
+    await expect(ui.getByRole("checkbox", { name: "Figma", exact: true })).toBeChecked();
+    await ui.getByRole("checkbox", { name: "Calendar", exact: true }).uncheck();
+    await ui.getByRole("button", { name: "2件をインポート" }).click();
     await expect(ui.getByRole("dialog")).toHaveCount(0);
-    await expect(ui.locator(".pinned-grid .imported-link")).toHaveCount(3);
+    await expect(ui.locator(".pinned-grid").getByRole("button", { name: "Calendar", exact: true })).toHaveCount(0);
+    await expect(ui.locator(".pinned-grid .imported-link")).toHaveCount(2);
     await expect(ui.locator(".imported-bookmarks")).toHaveCount(0);
     await ui.locator(".profile-button").click();
     await ui.locator(".profile-menu").getByRole("button", { name: "Personal" }).click();
@@ -437,7 +445,7 @@ test("初回セットアップ: ブックマークバーを非破壊で取り込
 
     await ui.locator(".profile-button").click();
     await ui.locator(".profile-menu").getByRole("button", { name: "Work" }).click();
-    await expect(ui.locator(".pinned-grid .imported-link")).toHaveCount(3);
+    await expect(ui.locator(".pinned-grid .imported-link")).toHaveCount(2);
     await ui.locator("summary").filter({ hasText: "Work Links" }).click();
     await ui.locator("summary").filter({ hasText: "Design" }).click();
     await ui.getByRole("button", { name: "Figma", exact: true }).click();
@@ -458,7 +466,8 @@ test("初回セットアップ: ブックマークバーを非破壊で取り込
     await bindClosedRoot(page, context);
     await expect(host).toHaveCSS("opacity", "1");
     await expect(ui.getByRole("dialog")).toHaveCount(0);
-    await expect(ui.locator(".pinned-grid .imported-link")).toHaveCount(3);
+    await expect(ui.locator(".pinned-grid").getByRole("button", { name: "Calendar", exact: true })).toHaveCount(0);
+    await expect(ui.locator(".pinned-grid .imported-link")).toHaveCount(2);
     await expect(ui.locator(".imported-bookmarks")).toHaveCount(0);
     await expect(ui.locator(".error-toast")).toHaveCount(0);
   } finally {
@@ -512,16 +521,20 @@ test("表示中はページと固定ヘッダーを左右・下ドックの外�
     const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
     await worker.evaluate(() => chrome.storage.local.set({ setupComplete: true, sidebarPinned: true }));
     await context.route("http://layout.test/**", route => route.fulfill({ contentType: "text/html", body:
-      '<body style="margin:0"><header style="position:fixed;left:0;right:0;top:0;height:40px">Header</header><main style="height:2400px">Page</main></body>' }));
+      '<style>.grid{display:grid;grid-template-columns:calc((100% - 800px)/2) 1fr}.search{grid-column:2;position:relative}.logo{position:absolute;left:-160px}</style><body style="margin:0"><header style="position:fixed;left:0;right:0;top:0;height:40px">Header</header><div class="grid"><div class="search"><span class="logo">Logo</span>Search</div></div><main style="height:2400px">Page</main></body>' }));
     const page = await context.newPage();
     await page.goto("http://layout.test/");
     const rect = selector => page.locator(selector).boundingBox();
     await expect.poll(async () => (await rect("body")).x).toBe(260);
     expect((await rect("header")).x).toBe(260);
-    expect((await rect("body")).width).toBe(940);
+    expect((await rect("body")).width).toBeCloseTo(940);
+    expect((await rect(".logo")).x).toBeGreaterThanOrEqual(260);
     await worker.evaluate(() => chrome.storage.local.set({ placement: "right" }));
     await expect.poll(async () => (await rect("body")).x).toBe(0);
-    expect((await rect("header")).width).toBe(940);
+    expect((await rect("header")).width).toBeCloseTo(940);
+    const logo = await rect(".logo");
+    expect(logo.x).toBeGreaterThanOrEqual(0);
+    expect(logo.x + logo.width).toBeLessThanOrEqual(940);
     await worker.evaluate(() => chrome.storage.local.set({ placement: "bottom" }));
     await expect.poll(async () => (await rect("body")).height).toBe(670);
     expect((await rect("body")).width).toBe(1200);
@@ -533,6 +546,15 @@ test("表示中はページと固定ヘッダーを左右・下ドックの外�
     await expect(page.locator("#sideflow-page-layout")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(350);
     expect((await rect("header")).width).toBe(1200);
+    await worker.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ url: "http://layout.test/*" });
+      await chrome.tabs.sendMessage(tab.id, { type: "sideflow-toggle" });
+    });
+    await worker.evaluate(() => chrome.storage.local.set({ placement: "left" }));
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await expect.poll(async () => (await rect("body")).width).toBeCloseTo(1140);
+    expect((await rect(".logo")).x).toBeGreaterThanOrEqual(260);
+    await page.screenshot({ path: "artifacts/sideflow-page-fit.png" });
   } finally { await context.close(); }
 });
 
