@@ -535,3 +535,44 @@ test("表示中はページと固定ヘッダーを左右・下ドックの外�
     expect((await rect("header")).width).toBe(1200);
   } finally { await context.close(); }
 });
+
+test("広告ブロックの実通信・無効化・サイト除外・保存", async () => {
+  const context = await chromium.launchPersistentContext("", {
+    channel: "chromium", executablePath: chromium.executablePath(), headless: true,
+    args: [`--disable-extensions-except=${path.resolve("dist")}`, `--load-extension=${path.resolve("dist")}`],
+  });
+  try {
+    const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
+    const id = new URL(worker.url()).host;
+    await expect.poll(() => worker.evaluate(async () => (await chrome.declarativeNetRequest.getDynamicRules()).length)).toBe(1);
+    const match = () => worker.evaluate(async () => chrome.declarativeNetRequest.testMatchOutcome({ url: "https://googleads.g.doubleclick.net/ad.js", initiator: "https://publisher.test", type: "script" }));
+    expect((await match()).matchedRules.length).toBe(1);
+    // Real requests to a blocked endpoint must fail before any network response.
+    const page = await context.newPage();
+    await context.route("https://publisher.test/**", route => route.fulfill({ contentType: "text/html", body: "<h1>Publisher</h1>" }));
+    await page.goto("https://publisher.test/");
+    const failure = page.waitForEvent("requestfailed", { predicate: request => request.url().includes("doubleclick.net") });
+    await page.evaluate(() => { const script = document.createElement("script"); script.src = "https://googleads.g.doubleclick.net/ad.js"; document.body.append(script); });
+    expect((await failure).failure().errorText).toContain("ERR_BLOCKED_BY_CLIENT");
+    const settings = await context.newPage();
+    await settings.goto(`chrome-extension://${id}/adblock.html`);
+    await expect(settings.locator("#enabled")).toBeChecked();
+    await settings.locator("#enabled").uncheck();
+    await settings.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(settings.getByRole("status")).toContainText("保存しました");
+    expect((await match()).matchedRules.length).toBe(0);
+    await settings.reload();
+    await expect(settings.locator("#enabled")).not.toBeChecked();
+    await settings.locator("#enabled").check();
+    await settings.locator("#sites").fill("https://publisher.test/path");
+    await settings.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(settings.getByRole("status")).toContainText("保存しました");
+    const allowed = await worker.evaluate(() => chrome.declarativeNetRequest.testMatchOutcome({ url: "https://publisher.test/", type: "main_frame" }));
+    expect(allowed.matchedRules.some(rule => rule.ruleId === 10001)).toBe(true);
+    await page.reload();
+    // Fulfill allowed network requests locally, without contacting an ad service.
+    await context.route("https://googleads.g.doubleclick.net/**", route => route.fulfill({ contentType: "text/javascript", body: "window.adRequestAllowed = true" }));
+    await page.evaluate(() => { const script = document.createElement("script"); script.src = "https://googleads.g.doubleclick.net/ad.js"; document.body.append(script); });
+    await expect.poll(() => page.evaluate(() => window.adRequestAllowed)).toBe(true);
+  } finally { await context.close(); }
+});

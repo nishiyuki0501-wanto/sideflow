@@ -1,0 +1,9 @@
+<!doctype html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>広告ブロック — Sideflow</title><link rel="stylesheet" href="adblock.css"></head>
+<body><main><a href="newtab.html">Sideflow</a><h1>広告ブロック</h1>
+<p>主要な広告配信ドメインへの外部通信をブロックします。閲覧履歴の収集や外部への送信は行いません。</p>
+<form><label class="toggle"><input id="enabled" type="checkbox"> 広告ブロックを有効にする</label>
+<label for="sites">除外するサイト</label><textarea id="sites" rows="7" placeholder="example.com&#10;news.example.org"></textarea>
+<p>1行に1サイト。サブドメインも除外されます。表示や動画が正常に動かないサイトを追加してください。</p>
+<button id="save" disabled>保存</button><p id="status" role="status"></p></form>
+<small>保存後は対象のページを再読み込みしてください。内蔵の基本フィルターを使用しており、すべての広告や動画内広告を除去するものではありません。フィルターは拡張の更新と一緒に更新されます。</small>
+</main><script src="adblock-settings.js"></script></body></html>

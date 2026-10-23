@@ -86,3 +86,16 @@ test("同方向の慣性は再発火せず、新しい加速には即反応す�
   assert.equal(consume(45,112),0);
   assert.equal(consume(60,220),1);
 });
+
+import { buildAdRules, normalizeSites } from "../extension/adblock.js";
+test("広告ブロックの無効化・除外・ドメイン正規化", () => {
+  assert.deepEqual(buildAdRules({ enabled: false }), []);
+  const sites = normalizeSites("https://EXAMPLE.com/path\nexample.com news.example.org");
+  assert.deepEqual(sites, ["example.com", "news.example.org"]);
+  const rules = buildAdRules({ excludedSites: sites });
+  assert.equal(rules.length, 3);
+  assert.equal(rules[0].condition.domainType, "thirdParty");
+  assert.equal(rules[0].condition.resourceTypes.includes("main_frame"), false);
+  assert.equal(rules[1].action.type, "allowAllRequests");
+  assert.throws(() => normalizeSites("file:///tmp/test"));
+});

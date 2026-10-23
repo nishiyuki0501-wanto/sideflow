@@ -1,3 +1,4 @@
+import "./adblock-background.js";
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(console.error);
 async function toggle(tab) {
   if (!tab?.id) return;

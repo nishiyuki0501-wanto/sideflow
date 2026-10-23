@@ -27,3 +27,5 @@ await cp("README.md", "dist/README.md");
 for (const file of ["newtab.html", "newtab.css", "newtab.js", "help.html"]) await cp(`extension/${file}`, `dist/${file}`);
 
 await cp("THIRD_PARTY_NOTICES.txt", "dist/THIRD_PARTY_NOTICES.txt");
+
+for (const file of ["adblock.js", "adblock-background.js", "adblock.html", "adblock.css", "adblock-settings.js"]) await cp(`extension/${file}`, `dist/${file}`);

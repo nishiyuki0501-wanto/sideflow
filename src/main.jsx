@@ -17,6 +17,7 @@ import {
   Globe,
   Check,
   Pin,
+  Shield,
 } from "lucide-react";
 import "./style.css";
 import { readBookmarkBar, countBookmarks } from "./bookmarks.js";
@@ -978,6 +979,8 @@ function App() {
           </button>
         </div>
         <footer className="sidebar-footer flex items-center justify-between">
+          {extension && <button className="icon-button" aria-label="広告ブロック設定" title="広告ブロック設定"
+            onClick={() => safely(() => browser.tabs.create({ url: browser.runtime.getURL("adblock.html") }))}><Shield size={16} /></button>}
           <button
             className="icon-button"
             onClick={() => setSearch(true)}
