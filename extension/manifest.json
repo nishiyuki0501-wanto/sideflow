@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sideflow — Sidebar for Chrome",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "Dia風の縦型サイドバー。ピン留め、タブグループ、テーマ切替。",
   "minimum_chrome_version": "116",
   "permissions": [

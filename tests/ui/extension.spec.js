@@ -576,3 +576,36 @@ test("広告ブロックの実通信・無効化・サイト除外・保存", as
     await expect.poll(() => page.evaluate(() => window.adRequestAllowed)).toBe(true);
   } finally { await context.close(); }
 });
+
+test("新規タブ: 4色テーマと見出しを保存し再読み込みと別タブに反映", async () => {
+  const context = await chromium.launchPersistentContext("", {
+    channel: "chromium", executablePath: chromium.executablePath(), headless: true,
+    args: [`--disable-extensions-except=${path.resolve("dist")}`, `--load-extension=${path.resolve("dist")}`],
+  });
+  try {
+    const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
+    const id = new URL(worker.url()).host;
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${id}/newtab.html`);
+    await page.getByText("ページをカスタマイズ", { exact: true }).click();
+    const other = await context.newPage();
+    await other.goto(`chrome-extension://${id}/newtab.html`);
+    for (const theme of ["lavender", "forest", "dark", "blue"]) {
+      await page.getByLabel("テーマ", { exact: true }).selectOption(theme);
+      await page.getByLabel("見出し", { exact: true }).fill(`今日の ${theme} <script>`);
+      await page.getByRole("button", { name: "保存", exact: true }).click();
+      await expect(page.getByRole("status")).toHaveText("保存しました");
+      await expect(other.locator("html")).toHaveAttribute("data-theme", theme);
+      await expect(other.locator("h1")).toHaveText(`今日の ${theme} <script>`);
+      await page.reload();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      await expect(page.locator("h1")).toHaveText(`今日の ${theme} <script>`);
+      await expect(page.getByLabel("見出し", { exact: true })).toHaveValue(`今日の ${theme} <script>`);
+      await page.getByText("ページをカスタマイズ", { exact: true }).click();
+    }
+    await page.getByLabel("見出し", { exact: true }).fill("   ");
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.locator("h1")).toHaveText("次のアイデアへ。");
+    await page.screenshot({ path: "artifacts/sideflow-newtab.png", fullPage: true });
+  } finally { await context.close(); }
+});

@@ -76,3 +76,24 @@ test("左右・下ドック切替と配置の保存", async ({ page }) => {
     (await content.boundingBox()).x,
   );
 });
+
+test("初期設定の応答がホバー待機中に届いても表示する", async ({ page }) => {
+  await page.goto("http://127.0.0.1:5173");
+  await page.evaluate(() => {
+    window.chrome = {
+      runtime: {
+        getURL: () => "data:text/css,",
+        sendMessage: () => new Promise(resolve => { window.finishInitialSettings = resolve; }),
+        onMessage: { addListener() {} },
+      },
+      storage: {
+        local: { get: async () => ({}) },
+        onChanged: { addListener() {} },
+      },
+    };
+  });
+  await page.addScriptTag({ path: "dist/content.js" });
+  await page.locator("#sideflow-edge").dispatchEvent("pointerenter");
+  await page.evaluate(() => window.finishInitialSettings({ visible: false, windowId: 1 }));
+  await expect(page.locator("#sideflow-surface")).toHaveCSS("opacity", "1");
+});

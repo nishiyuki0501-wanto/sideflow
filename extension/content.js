@@ -159,8 +159,13 @@
     windowId = state?.windowId ?? null;
     placement = validPlacement(s.placement);
     pinned = Boolean(s.sidebarPinned);
-    if (!visibilityTouched) show(state?.visible ?? pinned, false, false);
-    else layout();
+    // Initial storage/message responses may arrive during the hover delay.
+    // Applying the saved state must not cancel that pending user interaction.
+    if (!visibilityTouched) {
+      visible = state?.visible ?? pinned;
+      if (visible) clearTimeout(hoverTimer);
+    }
+    layout();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
