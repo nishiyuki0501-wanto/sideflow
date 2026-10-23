@@ -19,6 +19,7 @@
     transient = false,
     surfaceHovered = false,
     suppressHover = false;
+  let windowId = null, visibilityTouched = false;
   let hoverTimer,
     hideTimer;
   const consumeGesture = createGestureGate();
@@ -48,17 +49,22 @@
     host.inert = !visible;
     rail.style.cssText = `all:initial!important;position:fixed!important;z-index:2147483646!important;${bottom ? "bottom:0!important;left:0!important;width:100%!important;height:5px!important;" : `top:0!important;${placement}:0!important;width:5px!important;height:100vh!important;`}background:transparent!important;`;
   }
-  function show(value, temporary = false) {
+  function show(value, temporary = false, persist = true) {
     clearTimeout(hoverTimer);
     clearTimeout(hideTimer);
+    if (persist) visibilityTouched = true;
     visible = value;
+    if (persist && !temporary) {
+      visibilityTouched = true;
+      chrome.runtime.sendMessage({ type: "sideflow-window-state-set", visible: value }).catch(() => {});
+    }
     transient = value && temporary && !pinned;
     layout();
     if (value) globalThis.__sideflowRefresh?.();
   }
   function scheduleHide() {
     clearTimeout(hideTimer);
-    if (transient && !pinned) hideTimer = setTimeout(() => show(false), 450);
+    if (transient && !pinned) hideTimer = setTimeout(() => show(false, false, false), 450);
   }
   function close() {
     suppressHover = true;
@@ -113,10 +119,14 @@
       shadow.adoptedStyleSheets = [sheet];
     })
     .catch(console.error);
-  chrome.storage.local.get(["placement", "sidebarPinned"]).then((s) => {
+  Promise.all([
+    chrome.storage.local.get(["placement", "sidebarPinned"]),
+    chrome.runtime.sendMessage({ type: "sideflow-window-state-get" }).catch(() => ({})),
+  ]).then(([s, state]) => {
+    windowId = state?.windowId ?? null;
     placement = validPlacement(s.placement);
     pinned = Boolean(s.sidebarPinned);
-    if (pinned) show(true);
+    if (!visibilityTouched) show(state?.visible ?? pinned, false, false);
     else layout();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -132,6 +142,10 @@
     }
   });
   chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === "sideflow-window-state" && message.windowId === windowId && typeof message.visible === "boolean") {
+      visibilityTouched = true;
+      show(message.visible, false, false);
+    }
     if (message.type === "sideflow-toggle") visible ? close() : show(true);
     if (message.type === "sideflow-frame-wheel" && placement !== "bottom") wheel(message.dx, message.dy);
     if (message.type === "sideflow-ping") return;

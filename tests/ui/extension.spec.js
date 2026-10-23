@@ -116,8 +116,8 @@ test("拡張: ホバー・スワイプ・ピン留め・配置・実タブグル
     await page.mouse.wheel(100, 0);
     await expect(ui.locator(".profile-button")).toContainText("Personal");
     expect(await ui.locator(".sidebar-scroll").evaluate(el => el.getAnimations().some(a => a.effect.getTiming().duration === 320))).toBe(true);
-    await page.mouse.wheel(80, 0);
-    await expect(ui.locator(".profile-button")).toContainText("Personal");
+    // Momentum timing is covered with an explicit clock in model.test.js;
+    // UI assertions may take longer than the 100 ms gap between strokes.
     await page.mouse.wheel(-100, 0);
     await expect(ui.locator(".profile-button")).toContainText("Work");
     await page.mouse.wheel(0, 100);
@@ -293,6 +293,7 @@ test("拡張: ホバー・スワイプ・ピン留め・配置・実タブグル
       )
       .toBe(ids.gb);
     await expect(ui.locator(".color-pink .tab-row")).toHaveCount(2);
+    await expect(ui.locator(".sidebar")).toHaveAttribute("aria-busy", "false");
     await ui
       .locator(".color-pink .tab-row")
       .filter({ hasText: "Alpha-one" })
@@ -455,10 +456,6 @@ test("初回セットアップ: ブックマークバーを非破壊で取り込
     await page.bringToFront();
     await page.reload();
     await bindClosedRoot(page, context);
-    await worker.evaluate(async () => {
-      const [t] = await chrome.tabs.query({ url: "http://tabs.test/Import" });
-      await chrome.tabs.sendMessage(t.id, { type: "sideflow-toggle" });
-    });
     await expect(host).toHaveCSS("opacity", "1");
     await expect(ui.getByRole("dialog")).toHaveCount(0);
     await expect(ui.locator(".pinned-grid .imported-link")).toHaveCount(3);
@@ -467,4 +464,40 @@ test("初回セットアップ: ブックマークバーを非破壊で取り込
   } finally {
     await context.close();
   }
+});
+
+test("タブのクリックとタップで移動し、未ピン留めの表示状態を引き継ぐ", async () => {
+  const context = await chromium.launchPersistentContext("", {
+    channel: "chromium", executablePath: chromium.executablePath(), headless: true,
+    viewport: { width: 1200, height: 850 }, hasTouch: true,
+    args: [`--disable-extensions-except=${path.resolve("dist")}`, `--load-extension=${path.resolve("dist")}`],
+  });
+  try {
+    const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
+    await worker.evaluate(() => chrome.storage.local.set({ setupComplete: true, sidebarPinned: false, profile: "Personal", placement: "right" }));
+    await context.route("http://switch.test/**", route => route.fulfill({ contentType: "text/html", body: `<title>${new URL(route.request().url()).pathname.slice(1)}</title><h1>Page</h1>` }));
+    const a = await context.newPage(); await a.goto("http://switch.test/Tab-A");
+    const b = await context.newPage(); await b.goto("http://switch.test/Tab-B");
+    await a.bringToFront();
+    await a.mouse.move(1199, 350);
+    await expect(a.locator("#sideflow-surface")).toHaveCSS("opacity", "1");
+    await bindClosedRoot(a, context);
+    const uiA = a.locator("sideflow=div");
+    await uiA.locator(".tab-button").filter({ hasText: "Tab-B" }).click();
+    await expect.poll(() => worker.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].url)).toBe("http://switch.test/Tab-B");
+    await expect(b.locator("#sideflow-surface")).toHaveCSS("opacity", "1");
+    await bindClosedRoot(b, context);
+    const uiB = b.locator("sideflow=div");
+    await expect(uiB.locator(".profile-button")).toContainText("Personal");
+    await expect(b.locator("#sideflow-surface")).toHaveCSS("right", "0px");
+    await uiB.locator(".tab-button").filter({ hasText: "Tab-A" }).tap();
+    await expect.poll(() => worker.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].url)).toBe("http://switch.test/Tab-A");
+    await expect(a.locator("#sideflow-surface")).toHaveCSS("opacity", "1");
+    await a.reload();
+    await expect(a.locator("#sideflow-surface")).toHaveCSS("opacity", "1");
+    await bindClosedRoot(a, context);
+    await a.locator("sideflow=div").getByRole("button", { name: "サイドバーを閉じる", exact: true }).click();
+    await b.bringToFront();
+    await expect(b.locator("#sideflow-surface")).toHaveCSS("opacity", "0");
+  } finally { await context.close(); }
 });

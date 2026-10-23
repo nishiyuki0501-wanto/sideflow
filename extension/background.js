@@ -30,9 +30,36 @@ const allowedMethods = new Set([
   "windows.getCurrent",
   "bookmarks.getTree",
 ]);
+const visibilityKey = windowId => `sidebar-visible:${windowId}`;
+async function readVisibility(windowId) {
+  const key = visibilityKey(windowId);
+  const stored = await chrome.storage.session.get(key);
+  return { windowId, visible: stored[key] };
+}
+async function sendVisibility(windowId) {
+  const state = await readVisibility(windowId);
+  const message = { type: "sideflow-window-state", ...state };
+  const tabs = await chrome.tabs.query({ windowId });
+  await Promise.allSettled(tabs.map(tab => chrome.tabs.sendMessage(tab.id, message, { frameId: 0 })));
+  chrome.runtime.sendMessage(message).catch(() => {}); // Own new-tab extension pages.
+}
+chrome.tabs.onActivated.addListener(({ windowId }) => { sendVisibility(windowId).catch(() => {}); });
+chrome.windows.onRemoved.addListener(windowId => { chrome.storage.session.remove(visibilityKey(windowId)); });
 const faviconCache = new Map();
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (!sender.tab) return;
+  if (message.type === "sideflow-window-state-get" || message.type === "sideflow-window-state-set") {
+    (async () => {
+      const windowId = sender.tab.windowId;
+      if (message.type.endsWith("-set") && typeof message.visible === "boolean") {
+        await chrome.storage.session.set({ [visibilityKey(windowId)]: message.visible });
+        await sendVisibility(windowId);
+      }
+      return readVisibility(windowId);
+    })().then(respond, () => respond({}));
+    return true;
+  }
+
   if (message.type === "sideflow-frame-wheel" && sender.frameId !== 0) {
     if (Number.isFinite(message.dx) && Number.isFinite(message.dy))
       chrome.tabs.sendMessage(sender.tab.id, { type: message.type, dx: message.dx, dy: message.dy }, { frameId: 0 }).catch(() => {});

@@ -194,6 +194,9 @@ function App() {
   const [importBusy, setImportBusy] = useState(false);
   const pointerDrag = useRef(null);
   const suppressTabClick = useRef(false);
+  const movingTab = useRef(false);
+  const reloadTabs = useRef(async () => {});
+  const [tabBusy, setTabBusy] = useState(false);
   const [placement, setPlacement] = useState("left");
   const [sidebarPinned, setSidebarPinned] = useState(false);
   function postParent(message) {
@@ -249,12 +252,15 @@ function App() {
       return;
     }
     let disposed = false;
+    let loadGeneration = 0;
     async function load() {
+      if (movingTab.current) return;
+      const generation = ++loadGeneration;
       try {
         const win = await browser.windows.getCurrent();
         const tabs = await browser.tabs.query({ windowId: win.id });
         const gs = await browser.tabGroups.query({ windowId: win.id });
-        if (disposed) return;
+        if (disposed || movingTab.current || generation !== loadGeneration) return;
         setGroups(
           gs.map((g) => ({
             ...g,
@@ -268,6 +274,7 @@ function App() {
         setError(e.message);
       }
     }
+    reloadTabs.current = load;
     Promise.all([
       load(),
       browser.storage.local
@@ -446,11 +453,14 @@ function App() {
   function activate(tab) {
     setActive(tab.id);
     if (extension)
-      safely(() =>
-        tab.id
+      safely(async () => {
+        // A click from a hover reveal should also keep the sidebar at its destination.
+        if (overlay && globalThis.__sideflowIsVisible?.())
+          await browser.runtime.sendMessage({ type: "sideflow-window-state-set", visible: true });
+        return tab.id
           ? browser.tabs.update(tab.id, { active: true })
-          : browser.tabs.create({ url: tab.url }),
-      );
+          : browser.tabs.create({ url: tab.url });
+      });
     setSearch(false);
   }
   function saveSettings(values) {
@@ -473,6 +483,9 @@ function App() {
     if (!source) return;
     setDrag(null);
     if (extension) {
+      if (movingTab.current) return;
+      movingTab.current = true;
+      setTabBusy(true);
       await safely(async () => {
         const original =
           target === null
@@ -506,6 +519,9 @@ function App() {
             });
         }
       });
+      movingTab.current = false;
+      await reloadTabs.current();
+      setTabBusy(false);
       return;
     }
     setGroups((gs) =>
@@ -577,7 +593,11 @@ function App() {
             ].find((t) => t.url === node.url);
             if (found) activate(found);
             else if (extension)
-              safely(() => browser.tabs.create({ url: node.url }));
+              safely(async () => {
+                if (overlay && globalThis.__sideflowIsVisible?.())
+                  await browser.runtime.sendMessage({ type: "sideflow-window-state-set", visible: true });
+                await browser.tabs.create({ url: node.url });
+              });
             else {
               const tab = { id: Date.now(), title: node.title, url: node.url };
               setLoose((ts) => [...ts, tab]);
@@ -605,7 +625,7 @@ function App() {
         data-drop-index={index}
         data-drop-tab={tab.id}
         onPointerDown={(e) => {
-          if (e.button !== 0 || e.target.closest(".close-tab")) return;
+          if (movingTab.current || e.button !== 0 || e.target.closest(".close-tab")) return;
           pointerDrag.current = {
             id: tab.id,
             x: e.clientX,
@@ -613,7 +633,8 @@ function App() {
             dragging: false,
             target: null,
           };
-          e.currentTarget.setPointerCapture(e.pointerId);
+          // Capture on the actual button so a tap still dispatches its click there.
+          (e.target.closest(".tab-button") || e.currentTarget).setPointerCapture(e.pointerId);
         }}
         onPointerMove={(e) => {
           const current = pointerDrag.current;
@@ -670,7 +691,7 @@ function App() {
         onPointerUp={(e) => {
           const current = pointerDrag.current;
           pointerDrag.current = null;
-          e.currentTarget.releasePointerCapture(e.pointerId);
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
           if (current?.dragging) {
             e.preventDefault();
             suppressTabClick.current = true;
@@ -761,7 +782,7 @@ function App() {
         "--theme-wash": theme.wash,
       }}
     >
-      <aside className="sidebar flex flex-col" aria-label="縦型タブサイドバー">
+      <aside className="sidebar flex flex-col" aria-label="縦型タブサイドバー" aria-busy={tabBusy}>
         <header className="sidebar-header flex items-center">
           <div className="traffic-lights flex" aria-hidden="true">
             <i />
